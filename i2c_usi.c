@@ -58,23 +58,6 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 
 	case I2C_PROCESS_ADDRESS: // Process Address and send (N)Ack 0x04
 
-// 0 0000
-// 1 0001
-// 2 0010
-// 3 0011
-// 4 0100
-// 5 0101
-// 6 0110
-// 7 0111
-// 8 1000
-// 9 1001
-// A 1010
-// B 1011
-// C 1100
-// D 1101
-// E 1110
-// F 1111
-
 		if ( (USISRL & 0xFC) == (I2C_Addr & 0xFC))       // Address match?
 		{
 			I2C_State = (USISRL & 0x01) ? I2C_TX_DATA : I2C_RX_CMD;
