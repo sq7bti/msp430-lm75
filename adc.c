@@ -56,6 +56,16 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 	// V = A * 
 	switch(adc_sel) {
 		case 0: adc[adc_sel] = ((unsigned long)adc_avg[adc_sel] * 422 - 18169625) >> 8; break;
+		// 1000 * V = 780 + (C - 25) * 2.8
+		// 1000 * (1.5 * A>>16) = 780 + 2.8 * C - 70
+		// 1500 * A>>16 = 710 + 2.8 * C
+		// C = (1500 * A>>8 - 710<<8) / 2.8
+		// C = (1500 * A>>8 - 181760) / 2.8
+		// C = (535 * A>>8 - 64914)
+		// C = (535 * A - 16618057) >> 8
+
+		//case 1: adc[adc_sel] = (((535UL * ((unsigned long long)adc_avg[adc_sel])) >> 8) - 64914); break;
+		case 1: adc[adc_sel] = (535UL * (unsigned long long)adc_avg[adc_sel] - 16618057) >> 8; break;
 		case 3: ++adc[adc_sel]; break;
 		default: adc[adc_sel] = (adc_avg[adc_sel] >> 1); break; //((adc_avg[adc_sel] >> 0) + (adc_avg[adc_sel] >> 1)) >> 8; break;
 	}
@@ -73,9 +83,10 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 			adc_sel = 1;
 			break;
 		case 1:
-			ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
-			ADC10CTL1 = ADC10SSEL_3 + INCH_1;
-			adc_sel = 2;
+			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
+			//ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
+			ADC10CTL1 = ADC10SSEL_3 + INCH_10;
+			adc_sel = 0;
 			break;
 		case 2:
 			ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;

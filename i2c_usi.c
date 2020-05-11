@@ -75,10 +75,10 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 // E 1110
 // F 1111
 
-		if ( (USISRL & 0xF8) == (I2C_Addr & 0xF8))       // Address match?
+		if ( (USISRL & 0xFC) == (I2C_Addr & 0xFC))       // Address match?
 		{
 			I2C_State = (USISRL & 0x01) ? I2C_TX_DATA : I2C_RX_CMD;
-			SLV_Sel = (0x06 & USISRL) >> 1;
+			SLV_Sel = (0x02 & USISRL) >> 1;
 			USISRL = 0x00;                // Send Ack
 			USICTL0 |= USIOE;             // SDA = output
 			USICNT = (USICNT & 0xE0) | 0x01;               // Bit counter = 1, send (N)Ack bit
