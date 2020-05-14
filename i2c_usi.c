@@ -1,5 +1,5 @@
 
-#define __MSP430G2252__ 1
+#define __MSP430G2452__ 1
 #include <msp430.h>
 
 //depreciated: #include <signal.h>
@@ -124,12 +124,6 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 
 	case I2C_TX_DATA: // Send Data byte 0x0A
 		USICTL0 |= USIOE;             // SDA = output
-		//switch(SLV_Sel) {
-		//	case 3: USISRL = SLV_Data_3[Bytecount++]; break;
-		//	case 2: USISRL = SLV_Data_2[Bytecount++]; break;
-		//	case 1: USISRL = SLV_Data_1[Bytecount++]; break;
-		//	default: USISRL = SLV_Data_0[Bytecount++]; break;
-		//}
 		USISRL = SLV_Data[2*SLV_Sel+1-Bytecount++]; //Bytecount = 0;//SLV_Data[SLV_Sel] >>= 8; //[Bytecount++];
 		USICNT = (USICNT & 0xE0) | 0x08;               // Bit counter = 8, RX address
 		I2C_State = I2C_RECEIVE_DATA;               // Go to next state: receive (N)Ack
@@ -150,12 +144,6 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 			// LPM0_EXIT;                  // Exit active for next transfer
 		} else {                               // Ack received
 			USICTL0 |= USIOE;              // SDA = output
-			//switch(SLV_Sel) {
-			//	case 3: USISRL = SLV_Data_3[Bytecount++]; break;
-			//	case 2: USISRL = SLV_Data_2[Bytecount++]; break;
-			//	case 1: USISRL = SLV_Data_1[Bytecount++]; break;
-			//	default: USISRL = SLV_Data_0[Bytecount++]; break;
-			//}
 			USISRL = SLV_Data[2*SLV_Sel+1-Bytecount++]; //Bytecount = 0; // >> 8); SLV_Data[SLV_Sel] <<= 8; //[Bytecount++];
 			USICNT = (USICNT & 0xE0) | 0x08;               // Bit counter = 8, RX address
 			I2C_State = I2C_RECEIVE_DATA;  // Go to next state: receive (N)Ack
@@ -167,29 +155,10 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 	}
 
 	USICTL1 &= ~USIIFG;                       // Clear pending flags
-
-// -  - i2cset -y 0 0x38 0x00
-// b  - i2cset -y 0 0x38 0x00 0x00
-// w  - i2cset -y 0 0x38 0x00 0x0000 w
-// wp - i2cset -y 0 0x38 0x00 0x0000 wp
-//                                                           - / b / w / wp / saa /
-//                                       bytes(exl add):     1 / 2 / 3 /  4 /   5 /
-//	MST_Data[0] = hex2seven_matrix[int_count & 0xf]; //  5 / 7 / 9 /0xB / 0xD /
-////	MST_Data[1] = hex2seven_matrix[Bytecount & 0xf]; //  1 / 2 / 3 /  4 /   5 /
-////	MST_Data[2] = hex2seven_matrix[I2C_State & 0xf]; //  8 / 8 / 8 /  8 /   8 /
-////	MST_Data[3] = hex2seven_matrix[ rx_count & 0xf]; //  1 / 2 / 3 /  4 /   5 /
-
-///                                                            -   /   b / w   /   wp / saa /   gb / gw
-//       MST_Data[1] = hex2seven_matrix[start_count & 0xf]; //  1+1 / 1+1 / 1+1 /  1+1 / 1+1 /  1+1 /    /
-//	MST_Data[2] = hex2seven_matrix[stop_count & 0xf]; //  0+1 / 0+1 / 0+1 /  0+1 / 0+1 /  0+1 /    /
 }
 
 	void Setup_I2C(unsigned char* led_buff, unsigned char* adc_buff,
 						unsigned char* cfg) {
-
-//	P1DIR |= (BIT6 | BIT7);
-//	P1OUT |= (BIT6 | BIT7);             // P1.6 & P1.7 Pullups / P1.3 segment C
-//	P1REN |= (BIT6 | BIT7);             // P1.6 & P1.7 Pullups
 
 // USIPE7       *      (0x80)    /* USI  Port Enable Px.7 */
 // USIPE6       *      (0x40)    /* USI  Port Enable Px.6 */

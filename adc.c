@@ -1,4 +1,4 @@
-#define __MSP430G2252__ 1
+#define __MSP430G2452__ 1
 #include <msp430.h>
 
 //depreciated: #include <signal.h>
@@ -13,15 +13,6 @@ unsigned int adc_avg[4];
 unsigned char adc_sel;
 
 /**
-* Reads ADC 'chan' once using an internal reference, 'ref' determines if the
-*   2.5V or 1.5V reference is used.
-**/
-//void Single_Measure_Temp()
-//{
-//	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion
-//}
-
-/**
 * ADC interrupt routine. Pulls CPU out of sleep mode for the main loop.
 **/
 interrupt(ADC10_VECTOR) adc10_isr(void)
@@ -29,33 +20,27 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 
 	ADC10CTL0 &= ~ENC;
 
-//	adc[0] = 0x56;
-//	adc[1] = 0x78;
-
-	//adc[0] = 0x7f & ADC10MEM;	// Saves measured value.
-	//adc[1] = 0; //0xff & (ADC10MEM >> 8);
-
-//	adc[3] = adc[2];
-//	adc[2] = adc[1];
-//	adc[1] = adc[0];
-
-	if(adc_avg[adc_sel]) {
-		adc_avg[adc_sel] = (unsigned int)ADC10MEM << 6;
+	if(!adc_avg[adc_sel]) {
+		adc_avg[adc_sel] = ADC10MEM << 6;
 	} else {
-		adc_avg[adc_sel] -= adc_avg[adc_sel];
+		adc_avg[adc_sel] -= adc_avg[adc_sel] >> 6;
 		adc_avg[adc_sel] += ADC10MEM;
 	}
 
-	// C = A * 0.0014663 / 0.00355 - 277.75
-	//adc[0] = ((unsigned long)adc_avg[0] * 27069 - 18169625) >> 8;
-
-	// C = A * 0.00002288853284504463 / 0.00355 - 277.75
-	// C = A * 0.00644747404085764225 - 277.75
-	// C = (A * 422.54165874164644272676 - 18202393) >> 16
-
-	// V = A * 
 	switch(adc_sel) {
-		case 0: adc[adc_sel] = ((unsigned long)adc_avg[adc_sel] * 422 - 18169625) >> 8; break;
+		// A = 65535 * V / Vref
+		// 1.5 * A >> 16 = V
+		// 0.00355 * C + 0.986 = V
+		// 1.5 * A >> 16 = 0.00355 * C + 0.986
+		// (1.5 * A >> 16 - 0.986) / 0.00355 = C
+		// C = 1.5 * A >> 16 / 0.00355 - 277.75
+		// C << 8 = 448 * A >> 8 - 71104
+
+		case 0: adc[adc_sel] = ((unsigned long long)adc_avg[adc_sel] * 422 - 18169625) >> 8; break;
+
+		// C = (A * 27069 - 18169625) >> 16
+		//case 0: adc[adc_sel] = ((unsigned long long)adc_avg[0] * 27069 - 18169625) >> 8; break;
+
 		// 1000 * V = 780 + (C - 25) * 2.8
 		// 1000 * (1.5 * A>>16) = 780 + 2.8 * C - 70
 		// 1500 * A>>16 = 710 + 2.8 * C
@@ -65,9 +50,28 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = (535 * A - 16618057) >> 8
 
 		//case 1: adc[adc_sel] = (((535UL * ((unsigned long long)adc_avg[adc_sel])) >> 8) - 64914); break;
-		case 1: adc[adc_sel] = (535UL * (unsigned long long)adc_avg[adc_sel] - 16618057) >> 8; break;
-		case 3: ++adc[adc_sel]; break;
-		default: adc[adc_sel] = (adc_avg[adc_sel] >> 1); break; //((adc_avg[adc_sel] >> 0) + (adc_avg[adc_sel] >> 1)) >> 8; break;
+		//case 1: adc[adc_sel] = (535UL * (unsigned long long)adc_avg[adc_sel] - 16618057) >> 8; break;
+
+		// R = 2.75 * C + 695.86
+		// C = (R - 695.86) / 2.75
+
+		// V = R * I = R * 1.102mA
+		// R = 1000 * V / 1.102mA
+		// V = 1.5 * A >> 16
+		// R = 1500 * A >> 16 / 1.102
+		// C = (1500 * A >> 16 / 1.102) - 695.86) / 2.75
+		// C = A >> 16 * 494.967 - 253
+		// C = (A * 494.967 - (253 << 16)) >> 16
+		// C = (A * 494.967 - 16583229) >> 16
+		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 495) - 16583229) >> 8; break;
+
+		// C = (1653 * A >> 16) - 695.86) / 2.75
+		// C = (6001 * A >> 8) - 253 << 8
+		// C = (545 * A >> 8) - 64788
+		//case 1: adc[adc_sel] = (600UL * (unsigned long long)adc_avg[adc_sel] - 16583229) >> 8; break;
+
+		//case 3: ++adc[adc_sel]; break;
+		default: adc[adc_sel] = (adc_avg[adc_sel] >> 1); break;
 	}
 
 	switch(adc_sel) {
@@ -78,11 +82,10 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 			break;
 		case 0:
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
-			//ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
 			ADC10CTL1 = ADC10SSEL_3 + INCH_0;
 			adc_sel = 1;
 			break;
-		case 1:
+		/*case 1:
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
 			//ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
 			ADC10CTL1 = ADC10SSEL_3 + INCH_10;
@@ -92,12 +95,11 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 			ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
 			ADC10CTL1 = ADC10SSEL_3 + INCH_2;
 			adc_sel = 3;
-			break;
+			break;*/
 	}
 	__delay_cycles (128);							// Delay to allow Ref to settle
 
 	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion
-	//Single_Measure_Temp();
 }
 
 void Setup_ADC(unsigned int* buffer){
@@ -111,7 +113,7 @@ void Setup_ADC(unsigned int* buffer){
 										//   ADC On, enable ADC interrupt, Internal  = 'ref'
 	ADC10CTL1 = ADC10SSEL_3 + INCH_10;					// Set 'chan', SMCLK
 	__delay_cycles (128);							// Delay to allow Ref to settle
-	adc_sel = 3;
+	adc_sel = 0;
 
 	TACTL |= MC_1;
 	TACTL |= TASSEL_1;
