@@ -52,6 +52,11 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		//case 1: adc[adc_sel] = (((535UL * ((unsigned long long)adc_avg[adc_sel])) >> 8) - 64914); break;
 		//case 1: adc[adc_sel] = (535UL * (unsigned long long)adc_avg[adc_sel] - 16618057) >> 8; break;
 
+		// CPU #1 R = 2.8883 * C + 725.36
+		// CPU #2 R = 2.9283 * C + 737.83
+		// CPU #3 R = 2.75 * C + 695.86
+
+		// processor #3 with 1.102mA
 		// R = 2.75 * C + 695.86
 		// C = (R - 695.86) / 2.75
 
@@ -63,7 +68,36 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 494.967 - 253
 		// C = (A * 494.967 - (253 << 16)) >> 16
 		// C = (A * 494.967 - 16583229) >> 16
-		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 495) - 16583229) >> 8; break;
+//		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 495) - 16583229) >> 8; break;
+
+		// processor #3 with 1.107mA
+		// R = 2.75 * C + 695.86
+		// C = (R - 695.86) / 2.75
+
+		// V = R * I = R * 1.107mA
+		// R = 1000 * V / 1.107mA
+		// V = 1.5 * A >> 16
+		// R = 1500 * A >> 16 / 1.107
+		// C = (1500 * A >> 16 / 1.107) - 695.86) / 2.75
+		// C = A >> 16 * 492.7322 - 253
+		// C = (A * 492.7322 - (253 << 16)) >> 16
+		// C = (A * 492.7322 - 16583229) >> 16
+		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 493) - 16583229) >> 8; break;
+
+		// processor #1 with 1.237mA
+		// R = 2.8883 * C + 725.36
+		// C = (R - 725.36) / 2.8883
+
+		// V = R * I = R * 1.237mA
+		// R = 1000 * V / 1.237mA
+		// V = 1.5 * A >> 16
+		// R = 1500 * A >> 16 / 1.237
+		// C = (1500 * A >> 16 / 1.237) - 725.36) / 2.8883
+
+		// C = A >> 16 * 419.83 - 251
+		// C = (A * 419.83 - (251 << 16)) >> 16
+		// C = (A * 419.83 - 16458537.18796) >> 16
+//		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 420) - 16458537) >> 8; break;
 
 		// C = (1653 * A >> 16) - 695.86) / 2.75
 		// C = (6001 * A >> 8) - 253 << 8
@@ -76,6 +110,17 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 
 	switch(adc_sel) {
 		default:
+			if(adc[1] > (50 << 8)) {
+				if(adc[1] > (76 << 8)) {
+					CCR1 = 512;
+				} else {
+					// for 32 degrees PWM should increase by 256
+					CCR1 = 384 + ((adc[1] - (50 << 8)) >> 5);
+				}
+			} else {
+				CCR1 = 0;
+			}
+
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
 			ADC10CTL1 = ADC10SSEL_3 + INCH_10;
 			adc_sel = 0;

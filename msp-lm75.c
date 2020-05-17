@@ -49,11 +49,25 @@ int main(void)
 
 	Setup_I2C((unsigned char*)&display_buffer, (unsigned char*)&adc_buffer, (unsigned char*)&config);
 
+	P2DIR |= BIT6;             // P2.6 to output
+	//P2OUT |= BIT6;             // P2.6 to output
+	P2SEL |= BIT6;             // P2.6 to TA0.1
+	P2SEL &= ~BIT7;             // P2.6 to TA0.1
+	P2SEL2 &= ~(BIT6|BIT7);             // P2.6 to TA0.1
+
+	CCR0 = 512-1;             // PWM Period
+	CCTL1 |= OUTMOD_7; // + OUT;          // CCR1 reset/set
+	CCR1 = 256;                // CCR1 PWM duty cycle
+	CCTL2 |= OUTMOD_7;
+	TACTL = TASSEL_2 + MC_1;   // SMCLK, up mode
+
 	__eint();
 
 	for (;;)
 	{
 		nop();
 		WRITE_SR(GIE | CPUOFF);
+		// here implement PWM control
+		// if adc_buffer > low_range
 	}
 }
