@@ -9,8 +9,11 @@
 #include "adc.h"
 
 unsigned int* adc = 0;
-unsigned int adc_avg[4];
+unsigned int adc_avg[4], adc_temp;
 unsigned char adc_sel;
+unsigned char* pwm_control;
+unsigned int* threshold_control;
+unsigned int keep_on = 0;
 
 /**
 * ADC interrupt routine. Pulls CPU out of sleep mode for the main loop.
@@ -36,7 +39,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = 1.5 * A >> 16 / 0.00355 - 277.75
 		// C << 8 = 448 * A >> 8 - 71104
 
-		case 0: adc[adc_sel] = ((unsigned long long)adc_avg[adc_sel] * 422 - 18169625) >> 8; break;
+		case 0: adc_temp = ((unsigned long long)adc_avg[adc_sel] * 422 - 18169625) >> 8; break;
 
 		// C = (A * 27069 - 18169625) >> 16
 		//case 0: adc[adc_sel] = ((unsigned long long)adc_avg[0] * 27069 - 18169625) >> 8; break;
@@ -82,7 +85,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 492.7322 - 253
 		// C = (A * 492.7322 - (253 << 16)) >> 16
 		// C = (A * 492.7322 - 16583229) >> 16
-		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 493) - 16583229) >> 8; break;
+		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 493) - 16583229) >> 8; break;
 
 		// processor #1 with 1.237mA
 		// R = 2.8883 * C + 725.36
@@ -99,26 +102,53 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = (A * 419.83 - 16458537.18796) >> 16
 //		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 420) - 16458537) >> 8; break;
 
-		// C = (1653 * A >> 16) - 695.86) / 2.75
-		// C = (6001 * A >> 8) - 253 << 8
-		// C = (545 * A >> 8) - 64788
-		//case 1: adc[adc_sel] = (600UL * (unsigned long long)adc_avg[adc_sel] - 16583229) >> 8; break;
+		// processor #1 with 1.232mA
+		// R = 2.8883 * C + 725.36
+		// C = (R - 725.36) / 2.8883
+
+		// V = R * I = R * 1.232mA
+		// R = 1000 * V / 1.232mA
+		// V = 1.5 * A >> 16
+		// R = 1500 * A >> 16 / 1.232
+		// C = (1500 * A >> 16 / 1.232) - 725.36) / 2.8883
+
+		// C = A >> 16 * 421.54 - 251
+		// C = (A * 421.54 - (251 << 16)) >> 16
+		// C = (A * 421.54 - 16458537.18796) >> 16
+//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 422) - 16458537) >> 8; break;
 
 		//case 3: ++adc[adc_sel]; break;
-		default: adc[adc_sel] = (adc_avg[adc_sel] >> 1); break;
+		default: adc_temp = (adc_avg[adc_sel] >> 1); break;
 	}
 
+	adc[adc_sel] = ((0xFF & adc_temp) << 8) | (adc_temp >> 8);
+
+// usable values 9 (full scale) to 1 (no propotional control)
+#define PROPPWM 0
 	switch(adc_sel) {
 		default:
-			if(adc[1] > (50 << 8)) {
-				if(adc[1] > (76 << 8)) {
-					CCR1 = 512;
+			if(*pwm_control) {
+				if(adc_temp > (*threshold_control)) {
+					keep_on = 0xFFFF; //1 << 16;
+					if(adc_temp > (*threshold_control) + (16 << 8)) {
+						CCR1 = 512;
+					} else {
+						// for 32 degrees PWM should increase by 256
+						CCR1 = (512 - (1 << PROPPWM)) + ( (adc_temp - (*threshold_control) ) >> (12 - PROPPWM));
+						//CCR1 = (512 - (1 << 7)) + ( (adc_temp - (*threshold_control) ) >> 5);
+						//CCR1 = (512 - (1 << 6)) + ( (adc_temp - (*threshold_control) ) >> 6);
+						//CCR1 = (512 - (1 << 5)) + ( (adc_temp - (*threshold_control) ) >> 7);
+						//CCR1 = (512 - (1 << 4)) + ( (adc_temp - (*threshold_control) ) >> 8);
+						//CCR1 = (512 - (1 << 3)) + ( (adc_temp - (*threshold_control) ) >> 9);
+						//CCR1 = (512 - (1 << 2)) + ( (adc_temp - (*threshold_control) ) >> 10);
+					}
 				} else {
-					// for 32 degrees PWM should increase by 256
-					CCR1 = 384 + ((adc[1] - (50 << 8)) >> 5);
+					if(keep_on) {
+						--keep_on;
+					} else {
+						CCR1 = 0;
+					}
 				}
-			} else {
-				CCR1 = 0;
 			}
 
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
@@ -147,7 +177,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion
 }
 
-void Setup_ADC(unsigned int* buffer){
+void Setup_ADC(unsigned int* buffer, unsigned char* ctrl, unsigned int* thr){
 
 	ADC10CTL0 &= ~ENC;							// Disable ADC
 //	ADC10CTL0 = SREF0 + ADC10SHT_2 + ADC10ON + REFON + REF2_5V;
@@ -167,6 +197,8 @@ void Setup_ADC(unsigned int* buffer){
 	BCSCTL3 |= LFXT1S_2;
 
 	adc = (unsigned int*)buffer;
+	pwm_control = ctrl;
+	threshold_control = thr;
 
 	//Single_Measure_Temp();
 	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion

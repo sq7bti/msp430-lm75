@@ -124,7 +124,7 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 
 	case I2C_TX_DATA: // Send Data byte 0x0A
 		USICTL0 |= USIOE;             // SDA = output
-		USISRL = SLV_Data[2*SLV_Sel+1-Bytecount++]; //Bytecount = 0;//SLV_Data[SLV_Sel] >>= 8; //[Bytecount++];
+		USISRL = SLV_Data[2*SLV_Sel+Bytecount++];
 		USICNT = (USICNT & 0xE0) | 0x08;               // Bit counter = 8, RX address
 		I2C_State = I2C_RECEIVE_DATA;               // Go to next state: receive (N)Ack
 		break;
@@ -144,7 +144,7 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 			// LPM0_EXIT;                  // Exit active for next transfer
 		} else {                               // Ack received
 			USICTL0 |= USIOE;              // SDA = output
-			USISRL = SLV_Data[2*SLV_Sel+1-Bytecount++]; //Bytecount = 0; // >> 8); SLV_Data[SLV_Sel] <<= 8; //[Bytecount++];
+			USISRL = SLV_Data[2*SLV_Sel+Bytecount++];
 			USICNT = (USICNT & 0xE0) | 0x08;               // Bit counter = 8, RX address
 			I2C_State = I2C_RECEIVE_DATA;  // Go to next state: receive (N)Ack
 		}
