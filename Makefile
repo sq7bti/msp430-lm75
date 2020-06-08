@@ -10,10 +10,14 @@ CFLAGS=-mmcu=msp430g2452
 #CFLAGS=-mmcu=msp430g2553
 #USCICFLAGS=-Os -mmcu=msp430g2553
 LIBS=#-lm
-OBJECTS=msp-lm75.o adc.o
+OBJECTS = msp-lm75.o adc.o
+STRIP   = msp430-strip
+SIZE    = msp430-size
 
 msp-lm75: msp-lm75.o i2c_usi.o adc.o
 	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
+	#$(STRIP) $@
+	#$(SIZE) $@
 
 adc: adc.o
 	$(CC) $(CFLAGS) $^ $(LIBS) -o $@

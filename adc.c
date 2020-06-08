@@ -85,7 +85,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 492.7322 - 253
 		// C = (A * 492.7322 - (253 << 16)) >> 16
 		// C = (A * 492.7322 - 16583229) >> 16
-		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 493) - 16583229) >> 8; break;
+//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 493) - 16583229) >> 8; break;
 
 		// processor #1 with 1.237mA
 		// R = 2.8883 * C + 725.36
@@ -115,21 +115,20 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 421.54 - 251
 		// C = (A * 421.54 - (251 << 16)) >> 16
 		// C = (A * 421.54 - 16458537.18796) >> 16
-//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 422) - 16458537) >> 8; break;
+		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 422) - 16458537) >> 8; break;
 
-		//case 3: ++adc[adc_sel]; break;
 		default: adc_temp = (adc_avg[adc_sel] >> 1); break;
 	}
 
-	adc[adc_sel] = ((0xFF & adc_temp) << 8) | (adc_temp >> 8);
+	adc[adc_sel] = adc_temp;
 
 // usable values 9 (full scale) to 1 (no propotional control)
-#define PROPPWM 0
+#define PROPPWM 7
 	switch(adc_sel) {
 		default:
 			if(*pwm_control) {
 				if(adc_temp > (*threshold_control)) {
-					keep_on = 0xFFFF; //1 << 16;
+					keep_on = 0x0FFF; //1 << 16;
 					if(adc_temp > (*threshold_control) + (16 << 8)) {
 						CCR1 = 512;
 					} else {
@@ -149,6 +148,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 						CCR1 = 0;
 					}
 				}
+				adc[2] = CCR1;
 			}
 
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
@@ -170,6 +170,11 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 			ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
 			ADC10CTL1 = ADC10SSEL_3 + INCH_2;
 			adc_sel = 3;
+			break;
+		case 3:
+			ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;
+			ADC10CTL1 = ADC10SSEL_3 + INCH_5;
+			adc_sel = 3;
 			break;*/
 	}
 	__delay_cycles (128);							// Delay to allow Ref to settle
@@ -190,17 +195,12 @@ void Setup_ADC(unsigned int* buffer, unsigned char* ctrl, unsigned int* thr){
 	__delay_cycles (128);							// Delay to allow Ref to settle
 	adc_sel = 0;
 
-	TACTL |= MC_1;
-	TACTL |= TASSEL_1;
-	TACTL |= TAIE;
-
 	BCSCTL3 |= LFXT1S_2;
 
-	adc = (unsigned int*)buffer;
+	adc = buffer;
 	pwm_control = ctrl;
 	threshold_control = thr;
 
-	//Single_Measure_Temp();
 	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion
 }
 
