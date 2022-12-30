@@ -122,13 +122,15 @@ interrupt(USI_VECTOR) usi_i2c_txrx(void)
 					*configuration = USISRL;
 					break;
 				case 2:
-				case 3:
-//					SLV_Data[2]       <<= 8;
-//					SLV_Data[2]       |= USISRL;
-					MST_Data[cmd - 2] <<= 8;
-					MST_Data[cmd - 2] |= USISRL;
+					switch (CHIP_Sel) {
+						case 1:
+						case 2:
+							MST_Data[CHIP_Sel - 1] <<= 8;
+							MST_Data[CHIP_Sel - 1] |= USISRL;
+						break;
+					}
 					break;
-				defatul:
+				default:
 					break;
 			}
 

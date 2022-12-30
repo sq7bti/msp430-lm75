@@ -55,9 +55,24 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		//case 1: adc[adc_sel] = (((535UL * ((unsigned long long)adc_avg[adc_sel])) >> 8) - 64914); break;
 		//case 1: adc[adc_sel] = (535UL * (unsigned long long)adc_avg[adc_sel] - 16618057) >> 8; break;
 
-		// CPU #1 R = 2.8883 * C + 725.36
-		// CPU #2 R = 2.9283 * C + 737.83
-		// CPU #3 R = 2.75 * C + 695.86
+		// CPU #1 QAG9930A (pizza box) R = 2.8883 * C + 725.36
+		// CPU #2 QAU0003A             R = 2.9283 * C + 737.83
+		// CPU #3 QAQ9949A (desktop)   R = 2.75 * C + 695.86
+
+		// processor #1 with 1.102mA
+		// R = 2.9283 * C + 737.83
+		// C = (R - 737.83) / 2.9283
+
+		// V = R * I = R * 1.102mA
+		// R = 1000 * V / 1.102mA
+		// V = 1.5 * A >> 16
+		// R = 1500 * A >> 16 / 1.102
+		// C = (1500 * A >> 16 / 1.102) - 737.83) / 2.9283
+		// C = A >> 16 * 464.82994 - 251.965304
+
+		// C = (A * 464.82994 - (253 << 16)) >> 16
+		// C = (A * 464.82994 - 16512798.1695) >> 16
+//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 465) - 16512798) >> 8; break;
 
 		// processor #3 with 1.102mA
 		// R = 2.75 * C + 695.86
@@ -71,7 +86,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 494.967 - 253
 		// C = (A * 494.967 - (253 << 16)) >> 16
 		// C = (A * 494.967 - 16583229) >> 16
-//		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 495) - 16583229) >> 8; break;
+		case 1: adc_temp = ((((unsigned long long)adc_avg[adc_sel] * 495) - 16583229) >> 8) + threshold_control[1]; break;
 
 		// processor #3 with 1.107mA
 		// R = 2.75 * C + 695.86
@@ -100,7 +115,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 419.83 - 251
 		// C = (A * 419.83 - (251 << 16)) >> 16
 		// C = (A * 419.83 - 16458537.18796) >> 16
-//		case 1: adc[adc_sel] = (((unsigned long long)adc_avg[adc_sel] * 420) - 16458537) >> 8; break;
+//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 420) - 16458537) >> 8; break;
 
 		// processor #1 with 1.232mA
 		// R = 2.8883 * C + 725.36
@@ -115,7 +130,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 		// C = A >> 16 * 421.54 - 251
 		// C = (A * 421.54 - (251 << 16)) >> 16
 		// C = (A * 421.54 - 16458537.18796) >> 16
-		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 422) - 16458537) >> 8; break;
+//		case 1: adc_temp = (((unsigned long long)adc_avg[adc_sel] * 422) - 16458537) >> 8; break;
 
 		default: adc_temp = (adc_avg[adc_sel] >> 1); break;
 	}
@@ -123,17 +138,20 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 	adc[adc_sel] = adc_temp;
 
 // usable values 9 (full scale) to 1 (no propotional control)
-#define PROPPWM 7
+#define PROPPWM 9
+// PWM hystheresis range (range of temperature across which PWM changes from min to max) - expressed in log2(delta_temp)
+// e.g. 2 -> 4C, 3 -> 8C, 4 -> 16C
+#define PROPRANGE 2
 	switch(adc_sel) {
 		default:
 			if(*pwm_control) {
-				if(adc_temp > (*threshold_control)) {
+				if(adc_temp > threshold_control[0]) {
 					keep_on = 0x0FFF; //1 << 16;
-					if(adc_temp > (*threshold_control) + (16 << 8)) {
+					if(adc_temp > threshold_control[0] + (1 << (8 + PROPRANGE))) {
 						CCR1 = 512;
 					} else {
 						// for 32 degrees PWM should increase by 256
-						CCR1 = (512 - (1 << PROPPWM)) + ( (adc_temp - (*threshold_control) ) >> (12 - PROPPWM));
+						CCR1 = (512 - (1 << PROPPWM)) + ( (adc_temp - threshold_control[0] ) >> (8 + PROPRANGE - PROPPWM));
 						//CCR1 = (512 - (1 << 7)) + ( (adc_temp - (*threshold_control) ) >> 5);
 						//CCR1 = (512 - (1 << 6)) + ( (adc_temp - (*threshold_control) ) >> 6);
 						//CCR1 = (512 - (1 << 5)) + ( (adc_temp - (*threshold_control) ) >> 7);
@@ -148,7 +166,7 @@ interrupt(ADC10_VECTOR) adc10_isr(void)
 						CCR1 = 0;
 					}
 				}
-				adc[2] = CCR1;
+				adc[2] = (CCR1 < 511)?CCR1:511;
 			}
 
 			ADC10CTL0 = SREF_1 + ADC10SHT_3 + ADC10ON + REFON + ADC10IE;
@@ -203,4 +221,3 @@ void Setup_ADC(unsigned int* buffer, unsigned char* ctrl, unsigned int* thr){
 
 	ADC10CTL0 |= ENC + ADC10SC; 				// Enable and start conversion
 }
-

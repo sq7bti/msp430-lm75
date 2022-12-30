@@ -1,4 +1,4 @@
-//******************************************************************************
+//******************************************************************************//
 //
 //                  Slave                      Master
 //               MSP430G2452
@@ -15,7 +15,7 @@
 //            |                 |        |                 |
 //             -----------------          -----------------
 //
-//******************************************************************************
+//******************************************************************************//
 
 #define __MSP430G2452__ 1
 #include <msp430.h>
@@ -41,7 +41,7 @@ union adc_data_t {
 
 unsigned char i2c_config = 0;
 unsigned char control = 0;
-unsigned int threshold[2] = { (50 << 8), (66 << 8) };
+unsigned int threshold[2] = { (57 << 8), (0 << 8) };
 unsigned int i;
 unsigned int tacho;
 unsigned interval = 0;
@@ -80,24 +80,38 @@ int main(void)
 
 	Setup_I2C(adc_data.w, (unsigned int*)&threshold, (unsigned char*)&i2c_config);
 
+	P1IFG &= ~0x02;                           // P1.1 IFG cleared
+
 	__eint();		// enable interrupts
 
-	while(++CCR1 < 510) __delay_cycles(1 << 9);
+	TACTL &= ~TAIFG;
+//	TACTL |= TAIE;
 
-	for (i=0; i < 12; i++)
+	for (i=0; i < 3; i++)
 		__delay_cycles(0xFFFF);
 
+	while(++CCR1 < 512) __delay_cycles(1 << 9);
+
+	for (i=0; i < 5; i++)
+		__delay_cycles(0xFFFF);
+
+	TACTL &= ~TAIFG;
+repeat:
 	tacho = 0;
 
 	// 1/4 second delay = __delay_cycles(4000000);
-	for (i=0; i < 57; i++)
+	for (i=0; i < 350; i++)
 		__delay_cycles(1000);
 
-	adc_data.b[7] = (0xFF & tacho);
+	if(tacho > 255)
+		goto repeat;
 
-	while(--CCR1 > 2) __delay_cycles(1 << 10);
+	adc_data.b[7] = (0xFF & tacho); // store the max speed tacho for PWM=100%, in development setup it is a fan with approx 120Hz pulses at full speed, idle is approx 35Hz
 
-	__delay_cycles(0xFFFF);
+	while(--CCR1 > 2) __delay_cycles(1 << 9);
+
+	for (i=0; i < 3; i++)
+		__delay_cycles(0xFFFF);
 
 	control = 1;
 
@@ -120,7 +134,7 @@ interrupt(TIMER0_A1_VECTOR) timer0_a0_isr(void)
 	} else {
 		adc_data.b[6] = tacho;
 		tacho = 0;
-		interval = 31250/4; // 1s period, 4 pulses per revolution
+		interval = 8500;
 	}
 	TACTL &= ~TAIFG;
 };
